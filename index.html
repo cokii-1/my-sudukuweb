@@ -1,0 +1,1346 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>数独</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+      overflow-x: hidden;
+    }
+
+    .page-layout {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      position: relative;
+      z-index: 2;
+    }
+
+    .side-char {
+      position: fixed;
+      top: 50%;
+      z-index: 1;
+      perspective: 900px;
+      user-select: none;
+      pointer-events: none;
+    }
+
+    .side-char.left {
+      left: 0;
+      transform: translateY(-50%);
+    }
+
+    .side-char.right {
+      right: 0;
+      transform: translateY(-50%);
+    }
+
+    .char-peek {
+      overflow: visible;
+    }
+
+    .side-char.left .char-peek {
+      transform: translateX(-52%);
+    }
+
+    .side-char.right .char-peek {
+      transform: translateX(52%);
+    }
+
+    .char-stage {
+      position: relative;
+      transform-style: preserve-3d;
+      filter:
+        drop-shadow(0 10px 18px rgba(0, 0, 0, 0.28))
+        drop-shadow(0 28px 48px rgba(0, 0, 0, 0.38))
+        drop-shadow(0 52px 80px rgba(0, 0, 0, 0.22));
+    }
+
+    .char-stage::before {
+      content: "";
+      position: absolute;
+      left: -12%;
+      right: -12%;
+      top: -6%;
+      bottom: -4%;
+      background: radial-gradient(
+        ellipse at 50% 55%,
+        rgba(0, 0, 0, 0.34) 0%,
+        rgba(0, 0, 0, 0.16) 42%,
+        transparent 72%
+      );
+      z-index: -1;
+      pointer-events: none;
+    }
+
+    .char-figure {
+      width: 280px;
+      height: auto;
+      display: block;
+      position: relative;
+      z-index: 1;
+      filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.24));
+    }
+
+    .side-char.left .char-stage {
+      animation: sway-left 2.8s ease-in-out infinite;
+    }
+
+    .side-char.right .char-stage {
+      animation: sway-right 3.1s ease-in-out infinite;
+    }
+
+    .char-shadow {
+      width: 92%;
+      max-width: 270px;
+      height: 40px;
+      margin: 10px auto 0;
+      background: radial-gradient(
+        ellipse,
+        rgba(0, 0, 0, 0.48) 0%,
+        rgba(0, 0, 0, 0.26) 38%,
+        rgba(0, 0, 0, 0.08) 62%,
+        transparent 78%
+      );
+      border-radius: 50%;
+      animation: shadow-pulse 2.8s ease-in-out infinite;
+    }
+
+    .side-char.right .char-shadow {
+      animation-duration: 3.1s;
+    }
+
+    @keyframes sway-left {
+      0%, 100% { transform: rotateY(-15deg) rotateZ(30deg) translateY(0) translateX(0); }
+      25% { transform: rotateY(8deg) rotateZ(37deg) translateY(-10px) translateX(6px); }
+      50% { transform: rotateY(15deg) rotateZ(40deg) translateY(0) translateX(14px); }
+      75% { transform: rotateY(-5deg) rotateZ(33deg) translateY(-6px) translateX(4px); }
+    }
+
+    @keyframes sway-right {
+      0%, 100% { transform: rotateY(15deg) rotateZ(-30deg) translateY(0) translateX(0); }
+      25% { transform: rotateY(-8deg) rotateZ(-37deg) translateY(-9px) translateX(-6px); }
+      50% { transform: rotateY(-15deg) rotateZ(-40deg) translateY(0) translateX(-14px); }
+      75% { transform: rotateY(5deg) rotateZ(-33deg) translateY(-5px) translateX(-4px); }
+    }
+
+    @keyframes shadow-pulse {
+      0%, 100% { transform: scaleX(1) scaleY(1); opacity: 0.9; }
+      50% { transform: scaleX(0.88) scaleY(0.92); opacity: 0.55; }
+    }
+
+    @media (max-width: 900px) {
+      .side-char { display: none; }
+    }
+
+    .container {
+      background: #fff;
+      border-radius: 16px;
+      padding: 28px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+      max-width: 520px;
+      width: 100%;
+    }
+
+    h1 {
+      text-align: center;
+      color: #333;
+      margin-bottom: 16px;
+      font-size: 28px;
+    }
+
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .info {
+      color: #666;
+      font-size: 14px;
+    }
+
+    .info span { font-weight: bold; color: #667eea; }
+
+    .info select {
+      padding: 4px 8px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: bold;
+      color: #667eea;
+      background: #fff;
+      cursor: pointer;
+    }
+
+    .buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    button {
+      padding: 8px 14px;
+      border: none;
+      border-radius: 8px;
+      background: #667eea;
+      color: #fff;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    button:hover { background: #5a6fd6; }
+    button:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    button:disabled:hover { background: #667eea; }
+    button.secondary { background: #e8ecf7; color: #667eea; }
+    button.secondary:hover { background: #d8dff5; }
+    button.secondary:disabled:hover { background: #e8ecf7; }
+
+    .board-wrap {
+      margin-bottom: 16px;
+      overflow: visible;
+    }
+
+    .board-stack {
+      position: relative;
+      width: 100%;
+    }
+
+    .board-stack.size-6 {
+      max-width: 360px;
+      margin: 0 auto;
+    }
+
+    .board-wrap .board {
+      margin-bottom: 0;
+    }
+
+    .pause-overlay {
+      display: none;
+      position: absolute;
+      inset: 0;
+      background: rgba(255, 255, 255, 0.9);
+      backdrop-filter: blur(5px);
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      z-index: 10;
+      border-radius: 4px;
+      user-select: none;
+    }
+
+    .board-wrap.paused .pause-overlay {
+      display: flex;
+    }
+
+    .pause-overlay p {
+      font-size: 22px;
+      font-weight: 700;
+      color: #667eea;
+    }
+
+    .pause-overlay span {
+      font-size: 14px;
+      color: #999;
+    }
+
+    .numpad.paused {
+      opacity: 0.45;
+      pointer-events: none;
+    }
+
+    .board {
+      display: grid;
+      gap: 0;
+      border: 5px solid #333;
+      border-radius: 4px;
+      overflow: hidden;
+      user-select: none;
+      box-shadow:
+        0 4px 10px rgba(0, 0, 0, 0.14),
+        0 10px 28px rgba(0, 0, 0, 0.18),
+        0 18px 48px rgba(0, 0, 0, 0.1);
+    }
+
+    .cell {
+      aspect-ratio: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: clamp(18px, 4.2vw, 22px);
+      font-weight: 700;
+      border: 1px solid #ccc;
+      cursor: pointer;
+      background: #fff;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .cell.edge-top { border-top: none; }
+    .cell.edge-left { border-left: none; }
+    .cell.edge-right { border-right: none; }
+    .cell.edge-bottom { border-bottom: none; }
+    .cell.box-right { border-right: 2px solid #333; }
+    .cell.box-bottom { border-bottom: 2px solid #333; }
+
+    /* 题目原有数字：黑色 */
+    .cell.fixed {
+      color: #000;
+    }
+
+    /* 用户填入数字：深蓝色，格式与原始数字一致 */
+    .cell.user {
+      color: #1a3a8a;
+    }
+
+    .cell.user.error {
+      color: #d32f2f;
+      font-weight: 600;
+    }
+
+    .cell.selected {
+      background: #dce4ff !important;
+    }
+
+    .cell.highlight {
+      background: #eef2ff;
+    }
+
+    /* 与选中格同数字的其他格子 */
+    .cell.same-num {
+      background: #c9d4ff;
+    }
+
+    .cell.error {
+      background: #ffe0e0 !important;
+      color: #d32f2f;
+    }
+
+    /* 完成行/列/宫、提示：外框放大闪烁 */
+    .flash-layer {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 5;
+      overflow: visible;
+    }
+
+    .unit-flash-frame {
+      position: absolute;
+      box-sizing: border-box;
+      border: 3px solid hsl(50, 100%, 80%);
+      border-radius: 3px;
+      transform-origin: center center;
+      animation: frameFlash 1.4s ease forwards;
+    }
+
+    @keyframes frameFlash {
+      0% {
+        opacity: 0;
+        transform: scale(0.94);
+        border-color: hsla(50, 100%, 82%, 0);
+        box-shadow: none;
+      }
+      22% {
+        opacity: 1;
+        transform: scale(1.1);
+        border-color: hsl(48, 100%, 88%);
+        box-shadow:
+          0 0 8px 2px hsla(50, 100%, 84%, 0.95),
+          0 0 20px 6px hsla(48, 100%, 78%, 0.6),
+          0 0 36px 12px hsla(45, 100%, 72%, 0.32);
+      }
+      72% {
+        opacity: 1;
+        transform: scale(1.06);
+        border-color: hsl(50, 100%, 82%);
+        box-shadow:
+          0 0 6px 2px hsla(50, 100%, 82%, 0.8),
+          0 0 16px 5px hsla(48, 100%, 76%, 0.45),
+          0 0 28px 9px hsla(45, 100%, 70%, 0.2);
+      }
+      100% {
+        opacity: 0;
+        transform: scale(1);
+        border-color: hsla(50, 100%, 82%, 0);
+        box-shadow: none;
+      }
+    }
+
+    .cell.correct-flash {
+      animation: flash 0.5s;
+    }
+
+    @keyframes flash {
+      0%, 100% { background: #e8f5e9; }
+      50% { background: #a5d6a7; }
+    }
+
+    .numpad {
+      display: grid;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+
+    .numpad.cols-6 { grid-template-columns: repeat(6, 1fr); }
+    .numpad.cols-9 { grid-template-columns: repeat(9, 1fr); }
+
+    .numpad button {
+      aspect-ratio: 1;
+      padding: 0;
+      font-size: 18px;
+      font-weight: 600;
+      border-radius: 8px;
+    }
+
+    .numpad button.disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
+    .hint-text {
+      text-align: center;
+      color: #999;
+      font-size: 13px;
+    }
+
+    /* 胜利弹窗 */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+    }
+
+    .modal-overlay.show { display: flex; }
+
+    .win-fireworks {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .modal-box {
+      position: relative;
+      z-index: 1;
+      background: #fff;
+      padding: 32px;
+      border-radius: 16px;
+      text-align: center;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+      max-width: 320px;
+    }
+
+    .modal-box h2 {
+      color: #667eea;
+      margin-bottom: 12px;
+      font-size: 24px;
+    }
+
+    .modal-box p {
+      color: #666;
+      margin-bottom: 20px;
+    }
+
+    .modal-box.win-pop {
+      animation: winPop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    }
+
+    @keyframes winPop {
+      0% { opacity: 0; transform: scale(0.6); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+  </style>
+</head>
+<body>
+  <div class="side-char left">
+    <div class="char-peek">
+      <div class="char-stage">
+        <img class="char-figure" src="1.png" alt="">
+      </div>
+      <div class="char-shadow"></div>
+    </div>
+  </div>
+
+  <div class="page-layout">
+    <div class="container">
+    <h1>数独</h1>
+
+    <div class="toolbar">
+      <div class="info">
+        规格：
+        <select id="sizeSelect">
+          <option value="9">9×9</option>
+          <option value="6">6×6</option>
+        </select>
+        &nbsp;|&nbsp; 难度：
+        <select id="difficultySelect">
+          <option value="简单">简单</option>
+          <option value="中等">中等</option>
+          <option value="困难">困难</option>
+        </select>
+        &nbsp;|&nbsp; 用时：<span id="timer">00:00</span>
+      </div>
+      <div class="buttons">
+        <button class="secondary" id="pauseBtn">暂停</button>
+        <button class="secondary" id="undoBtn" disabled>撤销</button>
+        <button class="secondary" id="hintBtn">提示</button>
+        <button class="secondary" id="solveAllBtn">一键通关</button>
+        <button id="newGameBtn">新游戏</button>
+      </div>
+    </div>
+
+    <div class="board-wrap" id="boardWrap">
+      <div class="board-stack" id="boardStack">
+        <div class="board" id="board"></div>
+        <div class="flash-layer" id="flashLayer"></div>
+        <div class="pause-overlay" id="pauseOverlay">
+          <p>游戏已暂停</p>
+          <span>点击此处或按「继续」恢复</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="numpad" id="numpad"></div>
+    <p class="hint-text" id="hintText">点击格子选中，按数字键填数，Delete 或 0 清除，Ctrl+Z 撤销，P 或空格暂停</p>
+  </div>
+  </div>
+
+  <div class="side-char right">
+    <div class="char-peek">
+      <div class="char-stage">
+        <img class="char-figure" src="2.png" alt="">
+      </div>
+      <div class="char-shadow"></div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="winModal">
+    <canvas id="winFireworks" class="win-fireworks"></canvas>
+    <div class="modal-box" id="winModalBox">
+      <h2>恭喜完成！</h2>
+      <p id="winMessage">你成功解出了这盘数独</p>
+      <button id="playAgainBtn">再来一局</button>
+    </div>
+  </div>
+
+  <script>
+    // 参考 CSDN 博客算法：递归回溯生成完整盘面，再按 level 随机挖空
+    // https://blog.csdn.net/m0_46366547/article/details/131334720
+    const DIFFICULTY_LEVELS = {
+      "简单": 4,
+      "中等": 6,
+      "困难": 7
+    };
+
+    const SIZE_CONFIG = {
+      6: { size: 6, boxRows: 2, boxCols: 3, maxNum: 6 },
+      9: { size: 9, boxRows: 3, boxCols: 3, maxNum: 9 }
+    };
+
+    function getConfig() {
+      return SIZE_CONFIG[parseInt(sizeSelect.value, 10)];
+    }
+
+    function shuffleArray(arr) {
+      const copy = [...arr];
+      for (let i = copy.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [copy[i], copy[j]] = [copy[j], copy[i]];
+      }
+      return copy;
+    }
+
+    function createEmptyGrid(size) {
+      return Array.from({ length: size }, () => Array(size).fill(0));
+    }
+
+    function canPlace(grid, row, col, num, cfg) {
+      const { size, boxRows, boxCols } = cfg;
+      for (let i = 0; i < size; i++) {
+        if (grid[row][i] === num || grid[i][col] === num) return false;
+      }
+      const br = Math.floor(row / boxRows) * boxRows;
+      const bc = Math.floor(col / boxCols) * boxCols;
+      for (let r = br; r < br + boxRows; r++) {
+        for (let c = bc; c < bc + boxCols; c++) {
+          if (grid[r][c] === num) return false;
+        }
+      }
+      return true;
+    }
+
+    function generateSudokuBoard(cfg) {
+      const { size, maxNum } = cfg;
+      const grid = createEmptyGrid(size);
+      const numbers = Array.from({ length: maxNum }, (_, i) => i + 1);
+
+      function fillingBoard(row, col) {
+        if (row === size) return true;
+
+        const nextRow = col < size - 1 ? row : row + 1;
+        const nextCol = (col + 1) % size;
+
+        for (const num of shuffleArray(numbers)) {
+          if (canPlace(grid, row, col, num, cfg)) {
+            grid[row][col] = num;
+            if (fillingBoard(nextRow, nextCol)) return true;
+            grid[row][col] = 0;
+          }
+        }
+        return false;
+      }
+
+      fillingBoard(0, 0);
+      return grid;
+    }
+
+    function countSolutions(grid, cfg, limit = 2) {
+      const g = cloneGrid(grid);
+      const { size, maxNum } = cfg;
+      let count = 0;
+
+      function solve() {
+        if (count >= limit) return;
+
+        let emptyRow = -1;
+        let emptyCol = -1;
+        for (let r = 0; r < size; r++) {
+          for (let c = 0; c < size; c++) {
+            if (g[r][c] === 0) {
+              emptyRow = r;
+              emptyCol = c;
+              break;
+            }
+          }
+          if (emptyRow !== -1) break;
+        }
+
+        if (emptyRow === -1) {
+          count++;
+          return;
+        }
+
+        for (let num = 1; num <= maxNum; num++) {
+          if (canPlace(g, emptyRow, emptyCol, num, cfg)) {
+            g[emptyRow][emptyCol] = num;
+            solve();
+            g[emptyRow][emptyCol] = 0;
+          }
+        }
+      }
+
+      solve();
+      return count;
+    }
+
+    function createBoard(level, difficultyName, cfg) {
+      const solution = generateSudokuBoard(cfg);
+      const puzzle = cloneGrid(solution);
+      const totalCells = cfg.size * cfg.size;
+      const positions = shuffleArray(Array.from({ length: totalCells }, (_, i) => i));
+      const targetBlanks = Math.round(totalCells * level / 10);
+
+      let blanks = 0;
+      for (const pos of positions) {
+        if (blanks >= targetBlanks) break;
+
+        const row = Math.floor(pos / cfg.size);
+        const col = pos % cfg.size;
+        const backup = puzzle[row][col];
+        puzzle[row][col] = 0;
+
+        if (countSolutions(puzzle, cfg) === 1) {
+          blanks++;
+        } else {
+          puzzle[row][col] = backup;
+        }
+      }
+
+      return { puzzle, solution, difficulty: difficultyName };
+    }
+
+    function getCellBorderClasses(r, c, cfg) {
+      const { size, boxRows, boxCols } = cfg;
+      const classes = [];
+      if (r === 0) classes.push("edge-top");
+      if (c === 0) classes.push("edge-left");
+      if (r === size - 1) classes.push("edge-bottom");
+      if (c === size - 1) classes.push("edge-right");
+      if ((c + 1) % boxCols === 0 && c !== size - 1) classes.push("box-right");
+      if ((r + 1) % boxRows === 0 && r !== size - 1) classes.push("box-bottom");
+      return classes;
+    }
+
+    function getBoxIndex(r, c, cfg) {
+      const numBoxCols = cfg.size / cfg.boxCols;
+      return Math.floor(r / cfg.boxRows) * numBoxCols + Math.floor(c / cfg.boxCols);
+    }
+
+    let board = [];
+    let fixed = [];
+    let solution = [];
+    let selected = null;
+    let timerInterval = null;
+    let seconds = 0;
+    let gameWon = false;
+    let isPaused = false;
+    let history = [];
+    let prevCompleted = { rows: new Set(), cols: new Set(), boxes: new Set() };
+    let hintFlashCell = null;
+
+    const boardWrap = document.getElementById("boardWrap");
+    const boardStack = document.getElementById("boardStack");
+    const boardEl = document.getElementById("board");
+    const flashLayer = document.getElementById("flashLayer");
+    const numpadEl = document.getElementById("numpad");
+    const timerEl = document.getElementById("timer");
+    const sizeSelect = document.getElementById("sizeSelect");
+    const difficultySelect = document.getElementById("difficultySelect");
+    const winModal = document.getElementById("winModal");
+    const winModalBox = document.getElementById("winModalBox");
+    const winMessage = document.getElementById("winMessage");
+    const winFireworksCanvas = document.getElementById("winFireworks");
+    const fwCtx = winFireworksCanvas.getContext("2d");
+    let fwAnimId = null;
+    let fwBurstTimer = null;
+    let fwParticles = [];
+    let fwBurstCount = 0;
+    let fwMaxBursts = 0;
+    const undoBtn = document.getElementById("undoBtn");
+    const pauseBtn = document.getElementById("pauseBtn");
+    const pauseOverlay = document.getElementById("pauseOverlay");
+    const solveAllBtn = document.getElementById("solveAllBtn");
+
+    function cloneGrid(grid) {
+      return grid.map(row => [...row]);
+    }
+
+    function pushHistory() {
+      history.push({
+        board: cloneGrid(board),
+        fixed: cloneGrid(fixed),
+        selected: selected ? [...selected] : null,
+        gameWon,
+        seconds
+      });
+      updateUndoBtn();
+    }
+
+    function updateUndoBtn() {
+      undoBtn.disabled = history.length === 0;
+    }
+
+    function resumeTimer(fromSeconds) {
+      stopTimer();
+      seconds = fromSeconds;
+      const m = String(Math.floor(seconds / 60)).padStart(2, "0");
+      const s = String(seconds % 60).padStart(2, "0");
+      timerEl.textContent = `${m}:${s}`;
+      timerInterval = setInterval(() => {
+        seconds++;
+        const min = String(Math.floor(seconds / 60)).padStart(2, "0");
+        const sec = String(seconds % 60).padStart(2, "0");
+        timerEl.textContent = `${min}:${sec}`;
+      }, 1000);
+    }
+
+    function setPaused(paused) {
+      isPaused = paused;
+      pauseBtn.textContent = isPaused ? "继续" : "暂停";
+      boardWrap.classList.toggle("paused", isPaused);
+      numpadEl.classList.toggle("paused", isPaused);
+
+      if (isPaused) {
+        stopTimer();
+      } else {
+        resumeTimer(seconds);
+      }
+    }
+
+    function resetPause() {
+      isPaused = false;
+      pauseBtn.textContent = "暂停";
+      boardWrap.classList.remove("paused");
+      numpadEl.classList.remove("paused");
+    }
+
+    function togglePause() {
+      if (gameWon) return;
+      setPaused(!isPaused);
+    }
+
+    function undo() {
+      if (isPaused || history.length === 0) return;
+
+      const state = history.pop();
+      board = state.board;
+      fixed = state.fixed;
+      selected = state.selected;
+      gameWon = state.gameWon;
+
+      winModal.classList.remove("show");
+      winModalBox.classList.remove("win-pop");
+      stopWinFireworks();
+      resumeTimer(state.seconds);
+
+      render();
+      updateNumpad();
+      updateUndoBtn();
+    }
+
+    function startTimer() {
+      stopTimer();
+      seconds = 0;
+      timerEl.textContent = "00:00";
+      timerInterval = setInterval(() => {
+        seconds++;
+        const m = String(Math.floor(seconds / 60)).padStart(2, "0");
+        const s = String(seconds % 60).padStart(2, "0");
+        timerEl.textContent = `${m}:${s}`;
+      }, 1000);
+    }
+
+    function stopTimer() {
+      if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+      }
+    }
+
+    function initGame() {
+      const cfg = getConfig();
+      const difficulty = difficultySelect.value;
+      const level = DIFFICULTY_LEVELS[difficulty];
+      const data = createBoard(level, difficulty, cfg);
+
+      board = cloneGrid(data.puzzle);
+      solution = cloneGrid(data.solution);
+      fixed = board.map(row => row.map(v => v !== 0));
+      selected = null;
+      gameWon = false;
+      history = [];
+      prevCompleted = { rows: new Set(), cols: new Set(), boxes: new Set() };
+      winModal.classList.remove("show");
+      winModalBox.classList.remove("win-pop");
+      stopWinFireworks();
+      resetPause();
+      pauseBtn.disabled = false;
+      solveAllBtn.disabled = false;
+      flashLayer.innerHTML = "";
+
+      boardEl.className = `board size-${cfg.size}`;
+      boardStack.className = `board-stack size-${cfg.size}`;
+      boardEl.style.gridTemplateColumns = `repeat(${cfg.size}, 1fr)`;
+      numpadEl.className = `numpad cols-${cfg.size}`;
+      buildNumpad();
+
+      startTimer();
+      render();
+      updateNumpad();
+      updateUndoBtn();
+    }
+
+    function isUnitComplete(cells, cfg) {
+      const nums = cells.map(([r, c]) => board[r][c]);
+      if (nums.some(n => n === 0)) return false;
+      return new Set(nums).size === cfg.size;
+    }
+
+    function getCompletedUnits(cfg) {
+      const { size, boxRows, boxCols } = cfg;
+      const numBoxRows = size / boxRows;
+      const numBoxCols = size / boxCols;
+      const completed = { rows: new Set(), cols: new Set(), boxes: new Set() };
+
+      for (let r = 0; r < size; r++) {
+        const cells = Array.from({ length: size }, (_, c) => [r, c]);
+        if (isUnitComplete(cells, cfg)) completed.rows.add(r);
+      }
+
+      for (let c = 0; c < size; c++) {
+        const cells = Array.from({ length: size }, (_, r) => [r, c]);
+        if (isUnitComplete(cells, cfg)) completed.cols.add(c);
+      }
+
+      for (let br = 0; br < numBoxRows; br++) {
+        for (let bc = 0; bc < numBoxCols; bc++) {
+          const cells = [];
+          for (let r = br * boxRows; r < br * boxRows + boxRows; r++) {
+            for (let c = bc * boxCols; c < bc * boxCols + boxCols; c++) {
+              cells.push([r, c]);
+            }
+          }
+          if (isUnitComplete(cells, cfg)) completed.boxes.add(br * numBoxCols + bc);
+        }
+      }
+
+      return completed;
+    }
+
+    function isNewlyCompletedUnit(type, index, completed, prev) {
+      return completed[type].has(index) && !prev[type].has(index);
+    }
+
+    function getUnitRect(type, index, cfg) {
+      const { size, boxRows, boxCols } = cfg;
+      const numBoxRows = size / boxRows;
+      const numBoxCols = size / boxCols;
+
+      if (type === "row") {
+        return { left: 0, top: (index / size) * 100, width: 100, height: 100 / size };
+      }
+      if (type === "col") {
+        return { left: (index / size) * 100, top: 0, width: 100 / size, height: 100 };
+      }
+      if (type === "box") {
+        const br = Math.floor(index / numBoxCols);
+        const bc = index % numBoxCols;
+        return {
+          left: (bc / numBoxCols) * 100,
+          top: (br / numBoxRows) * 100,
+          width: 100 / numBoxCols,
+          height: 100 / numBoxRows
+        };
+      }
+      const [r, c] = index;
+      return { left: (c / size) * 100, top: (r / size) * 100, width: 100 / size, height: 100 / size };
+    }
+
+    function addFlashFrame(type, index, cfg) {
+      const rect = getUnitRect(type, index, cfg);
+      const frame = document.createElement("div");
+      frame.className = "unit-flash-frame";
+      frame.style.left = `${rect.left}%`;
+      frame.style.top = `${rect.top}%`;
+      frame.style.width = `${rect.width}%`;
+      frame.style.height = `${rect.height}%`;
+      flashLayer.appendChild(frame);
+      frame.addEventListener("animationend", () => frame.remove());
+    }
+
+    function triggerFlashFrames(completed, prev, hintCell, cfg) {
+      for (let r = 0; r < cfg.size; r++) {
+        if (isNewlyCompletedUnit("rows", r, completed, prev)) addFlashFrame("row", r, cfg);
+      }
+      for (let c = 0; c < cfg.size; c++) {
+        if (isNewlyCompletedUnit("cols", c, completed, prev)) addFlashFrame("col", c, cfg);
+      }
+      const numBoxes = (cfg.size / cfg.boxRows) * (cfg.size / cfg.boxCols);
+      for (let b = 0; b < numBoxes; b++) {
+        if (isNewlyCompletedUnit("boxes", b, completed, prev)) addFlashFrame("box", b, cfg);
+      }
+      if (hintCell) addFlashFrame("cell", hintCell, cfg);
+    }
+
+    function render() {
+      const cfg = getConfig();
+      const completed = getCompletedUnits(cfg);
+      const selectedValue = selected && board[selected[0]][selected[1]] !== 0
+        ? board[selected[0]][selected[1]]
+        : null;
+
+      boardEl.innerHTML = "";
+      for (let r = 0; r < cfg.size; r++) {
+        for (let c = 0; c < cfg.size; c++) {
+          const cell = document.createElement("div");
+          cell.className = "cell";
+          getCellBorderClasses(r, c, cfg).forEach(cls => cell.classList.add(cls));
+          cell.dataset.row = r;
+          cell.dataset.col = c;
+
+          const val = board[r][c];
+          if (val !== 0) cell.textContent = val;
+
+          if (fixed[r][c]) {
+            cell.classList.add("fixed");
+          } else if (board[r][c] !== 0) {
+            cell.classList.add("user");
+          }
+
+          cell.addEventListener("click", () => selectCell(r, c));
+
+          if (selected && selected[0] === r && selected[1] === c) {
+            cell.classList.add("selected");
+          }
+
+          if (
+            selectedValue &&
+            board[r][c] === selectedValue &&
+            !(selected[0] === r && selected[1] === c)
+          ) {
+            cell.classList.add("same-num");
+          }
+
+          if (board[r][c] !== 0 && hasConflict(r, c, board[r][c], cfg)) {
+            cell.classList.add("error");
+          }
+
+          if (selected) {
+            const [sr, sc] = selected;
+            if ((r === sr || c === sc) && !(r === sr && c === sc)) {
+              cell.classList.add("highlight");
+            }
+          }
+
+          boardEl.appendChild(cell);
+        }
+      }
+
+      triggerFlashFrames(completed, prevCompleted, hintFlashCell, cfg);
+
+      prevCompleted = {
+        rows: new Set(completed.rows),
+        cols: new Set(completed.cols),
+        boxes: new Set(completed.boxes)
+      };
+    }
+
+    function selectCell(r, c) {
+      if (gameWon || isPaused) return;
+      selected = [r, c];
+      render();
+    }
+
+    function hasConflict(row, col, num, cfg) {
+      if (num === 0) return false;
+      const { size, boxRows, boxCols } = cfg;
+      for (let i = 0; i < size; i++) {
+        if (i !== col && board[row][i] === num) return true;
+        if (i !== row && board[i][col] === num) return true;
+      }
+      const br = Math.floor(row / boxRows) * boxRows;
+      const bc = Math.floor(col / boxCols) * boxCols;
+      for (let r = br; r < br + boxRows; r++) {
+        for (let c = bc; c < bc + boxCols; c++) {
+          if ((r !== row || c !== col) && board[r][c] === num) return true;
+        }
+      }
+      return false;
+    }
+
+    function showWinMessage() {
+      const cfg = getConfig();
+      winMessage.textContent = `用时 ${timerEl.textContent}，${cfg.size}×${cfg.size}，难度：${difficultySelect.value}`;
+    }
+
+    const FW_COLORS = ["#ffd700", "#ff6b6b", "#4ecdc4", "#667eea", "#ffe66d", "#ff9ff3", "#54a0ff", "#fff", "#feca57"];
+
+    function resizeFireworksCanvas() {
+      winFireworksCanvas.width = window.innerWidth;
+      winFireworksCanvas.height = window.innerHeight;
+    }
+
+    function createSparkBurst(x, y, count, speedScale = 1) {
+      for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = (2.5 + Math.random() * 6) * speedScale;
+        fwParticles.push({
+          x,
+          y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          life: 1,
+          decay: 0.01 + Math.random() * 0.018,
+          color: FW_COLORS[Math.floor(Math.random() * FW_COLORS.length)],
+          size: 1.5 + Math.random() * 3.5,
+          gravity: 0.05 + Math.random() * 0.05,
+          sparkle: Math.random() > 0.35
+        });
+      }
+    }
+
+    function animateFireworks() {
+      const w = winFireworksCanvas.width;
+      const h = winFireworksCanvas.height;
+      fwCtx.clearRect(0, 0, w, h);
+
+      fwParticles = fwParticles.filter(p => p.life > 0);
+
+      for (const p of fwParticles) {
+        const prevX = p.x;
+        const prevY = p.y;
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += p.gravity;
+        p.vx *= 0.985;
+        p.life -= p.decay;
+
+        fwCtx.globalAlpha = Math.max(0, p.life);
+        fwCtx.shadowBlur = 10;
+        fwCtx.shadowColor = p.color;
+        fwCtx.fillStyle = p.color;
+        fwCtx.beginPath();
+        fwCtx.arc(p.x, p.y, p.size * Math.max(0.4, p.life), 0, Math.PI * 2);
+        fwCtx.fill();
+        fwCtx.shadowBlur = 0;
+
+        if (p.sparkle) {
+          fwCtx.globalAlpha = Math.min(1, p.life * 0.85);
+          fwCtx.strokeStyle = p.color;
+          fwCtx.lineWidth = 1.2;
+          fwCtx.beginPath();
+          fwCtx.moveTo(prevX, prevY);
+          fwCtx.lineTo(p.x, p.y);
+          fwCtx.stroke();
+        }
+      }
+
+      fwCtx.globalAlpha = 1;
+
+      if (fwParticles.length > 0 || fwBurstCount < fwMaxBursts) {
+        fwAnimId = requestAnimationFrame(animateFireworks);
+      } else {
+        setTimeout(stopWinFireworks, 400);
+      }
+    }
+
+    function launchWinFireworks(originX, originY) {
+      stopWinFireworks();
+      resizeFireworksCanvas();
+
+      const w = winFireworksCanvas.width;
+      const h = winFireworksCanvas.height;
+      fwMaxBursts = 6;
+      fwBurstCount = 0;
+
+      createSparkBurst(originX, originY, 70, 1.3);
+      createSparkBurst(originX, originY, 40, 0.85);
+      fwBurstCount = 1;
+
+      fwBurstTimer = setInterval(() => {
+        if (fwBurstCount >= fwMaxBursts) {
+          clearInterval(fwBurstTimer);
+          fwBurstTimer = null;
+          return;
+        }
+        const x = w * 0.12 + Math.random() * w * 0.76;
+        const y = h * 0.1 + Math.random() * h * 0.5;
+        createSparkBurst(x, y, 35 + Math.floor(Math.random() * 25));
+        fwBurstCount++;
+      }, 320);
+
+      fwAnimId = requestAnimationFrame(animateFireworks);
+    }
+
+    function stopWinFireworks() {
+      if (fwAnimId) {
+        cancelAnimationFrame(fwAnimId);
+        fwAnimId = null;
+      }
+      if (fwBurstTimer) {
+        clearInterval(fwBurstTimer);
+        fwBurstTimer = null;
+      }
+      fwParticles = [];
+      fwBurstCount = 0;
+      fwMaxBursts = 0;
+      fwCtx.clearRect(0, 0, winFireworksCanvas.width, winFireworksCanvas.height);
+    }
+
+    function handleWin(lastCell) {
+      gameWon = true;
+      resetPause();
+      stopTimer();
+      pauseBtn.disabled = true;
+      solveAllBtn.disabled = true;
+      showWinMessage();
+
+      let ox = window.innerWidth / 2;
+      let oy = window.innerHeight / 2;
+      if (lastCell) {
+        const cell = boardEl.querySelector(`[data-row="${lastCell[0]}"][data-col="${lastCell[1]}"]`);
+        if (cell) {
+          const rect = cell.getBoundingClientRect();
+          ox = rect.left + rect.width / 2;
+          oy = rect.top + rect.height / 2;
+        }
+      } else {
+        const rect = boardStack.getBoundingClientRect();
+        ox = rect.left + rect.width / 2;
+        oy = rect.top + rect.height / 2;
+      }
+
+      winModalBox.classList.remove("win-pop");
+      void winModalBox.offsetWidth;
+      winModal.classList.add("show");
+      winModalBox.classList.add("win-pop");
+
+      requestAnimationFrame(() => launchWinFireworks(ox, oy));
+    }
+
+    function setCellValue(num) {
+      if (!selected || gameWon || isPaused) return;
+      const [r, c] = selected;
+      if (fixed[r][c]) return;
+      if (board[r][c] === num) return;
+
+      pushHistory();
+      board[r][c] = num;
+      render();
+      updateNumpad();
+
+      if (num !== 0 && checkWin()) {
+        handleWin([r, c]);
+      }
+    }
+
+    function checkWin() {
+      const cfg = getConfig();
+      for (let r = 0; r < cfg.size; r++) {
+        for (let c = 0; c < cfg.size; c++) {
+          if (board[r][c] === 0) return false;
+          if (hasConflict(r, c, board[r][c], cfg)) return false;
+        }
+      }
+      return true;
+    }
+
+    function updateNumpad() {
+      const cfg = getConfig();
+      const counts = Array(cfg.maxNum + 1).fill(0);
+      for (let r = 0; r < cfg.size; r++) {
+        for (let c = 0; c < cfg.size; c++) {
+          if (board[r][c] !== 0) counts[board[r][c]]++;
+        }
+      }
+      numpadEl.querySelectorAll("button").forEach(btn => {
+        const n = parseInt(btn.dataset.num, 10);
+        btn.classList.toggle("disabled", counts[n] >= cfg.size);
+      });
+    }
+
+    function buildNumpad() {
+      const cfg = getConfig();
+      numpadEl.innerHTML = "";
+      for (let n = 1; n <= cfg.maxNum; n++) {
+        const btn = document.createElement("button");
+        btn.textContent = n;
+        btn.dataset.num = n;
+        btn.addEventListener("click", () => {
+          if (!btn.classList.contains("disabled")) setCellValue(n);
+        });
+        numpadEl.appendChild(btn);
+      }
+    }
+
+    function solveAll() {
+      if (gameWon || isPaused) return;
+
+      const cfg = getConfig();
+      let lastCell = null;
+      for (let r = 0; r < cfg.size; r++) {
+        for (let c = 0; c < cfg.size; c++) {
+          if (!fixed[r][c] && board[r][c] === 0) lastCell = [r, c];
+        }
+      }
+      if (!lastCell) return;
+
+      pushHistory();
+      for (let r = 0; r < cfg.size; r++) {
+        for (let c = 0; c < cfg.size; c++) {
+          if (!fixed[r][c]) board[r][c] = solution[r][c];
+        }
+      }
+      selected = lastCell;
+      render();
+      updateNumpad();
+      handleWin(lastCell);
+    }
+
+    function giveHint() {
+      if (gameWon || isPaused) return;
+      const cfg = getConfig();
+      const empties = [];
+      for (let r = 0; r < cfg.size; r++) {
+        for (let c = 0; c < cfg.size; c++) {
+          if (!fixed[r][c] && board[r][c] === 0) empties.push([r, c]);
+        }
+      }
+      if (empties.length === 0) return;
+
+      const [r, c] = empties[Math.floor(Math.random() * empties.length)];
+      pushHistory();
+      board[r][c] = solution[r][c];
+      fixed[r][c] = true;
+      selected = [r, c];
+      hintFlashCell = [r, c];
+      render();
+      hintFlashCell = null;
+      updateNumpad();
+
+      if (checkWin()) {
+        handleWin([r, c]);
+      }
+    }
+
+    document.addEventListener("keydown", (e) => {
+      const cfg = getConfig();
+
+      if (e.key === " " || e.key === "p" || e.key === "P") {
+        if (gameWon) return;
+        e.preventDefault();
+        togglePause();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "z") {
+        e.preventDefault();
+        undo();
+        return;
+      }
+      if (gameWon || isPaused) return;
+
+      const digit = parseInt(e.key, 10);
+      if (digit >= 1 && digit <= cfg.maxNum) {
+        setCellValue(digit);
+      } else if (e.key === "0" || e.key === "Backspace" || e.key === "Delete") {
+        setCellValue(0);
+      } else if (e.key.startsWith("Arrow")) {
+        const max = cfg.size - 1;
+        if (!selected) { selectCell(0, 0); return; }
+        let [r, c] = selected;
+        if (e.key === "ArrowUp") r = Math.max(0, r - 1);
+        if (e.key === "ArrowDown") r = Math.min(max, r + 1);
+        if (e.key === "ArrowLeft") c = Math.max(0, c - 1);
+        if (e.key === "ArrowRight") c = Math.min(max, c + 1);
+        selectCell(r, c);
+      }
+    });
+
+    document.getElementById("newGameBtn").addEventListener("click", () => initGame());
+    document.getElementById("playAgainBtn").addEventListener("click", () => initGame());
+    document.getElementById("hintBtn").addEventListener("click", giveHint);
+    document.getElementById("solveAllBtn").addEventListener("click", solveAll);
+    pauseBtn.addEventListener("click", togglePause);
+    pauseOverlay.addEventListener("click", () => { if (isPaused) setPaused(false); });
+    undoBtn.addEventListener("click", undo);
+    sizeSelect.addEventListener("change", () => initGame());
+    window.addEventListener("resize", () => {
+      if (winModal.classList.contains("show")) resizeFireworksCanvas();
+    });
+
+    initGame();
+  </script>
+</body>
+</html>
